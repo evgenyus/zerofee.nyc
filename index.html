@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Zero Fee NYC - A Map of No-Fee Buildings in NYC</title>
+        <meta charset="utf-8">
+	<meta name="description" content="A map of more than 2,000 no-fee rental buildings in Manhattan, NYC">
+        <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+        <link rel="icon" type="image/png" href="favicon.png" sizes="32x32"><!-- Icon by Freepik / CC BY -->
+        <link href="http://fonts.googleapis.com/css?family=Roboto" rel="stylesheet" type="text/css">
+        <style>            
+            html, body, #map-canvas {
+                height: 100%;
+                margin: 0;
+                padding: 0
+            }
+            
+            body {
+                font-family: "Roboto", sans-serif;
+            }
+            
+            #intro {
+                font-size: 32px;
+                z-index: 100;
+                position: absolute;
+                top: 50px;
+                color: black;
+                text-shadow: 0 0 5px white;
+                margin: 50px;
+            }
+            
+            #info-box {
+                background-color: white;
+                border: 1px solid black;
+                bottom: 30px;
+                padding: 10px;
+                position: absolute;
+                left: 30px;
+                display: none;
+            }
+            
+            #infoWindow-fix {
+                width: 200px;
+                font-size: 14px;
+            }
+            
+            #stabilized {
+                z-index: 100;
+                position: absolute;
+                bottom: 100px;
+                text-shadow: 0 0 2px white;
+                left: 30px;                
+            }
+            
+        </style>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>        
+        <script src="https://maps.googleapis.com/maps/api/js?v=3.exp"></script>
+        <script>
+        (function() {
+            var map, managers;
+            
+            setTimeout(function(){
+                $("#intro").fadeOut();
+            }, 3000);
+            
+            function initialize() {
+                var grayscaleStyles = [{"featureType":"landscape","stylers":[{"saturation":-100},{"lightness":65},{"visibility":"on"}]},{"featureType":"poi","stylers":[{"saturation":-100},{"lightness":51},{"visibility":"simplified"}]},{"featureType":"road.highway","stylers":[{"saturation":-100},{"visibility":"simplified"}]},{"featureType":"road.arterial","stylers":[{"saturation":-100},{"lightness":30},{"visibility":"on"}]},{"featureType":"road.local","stylers":[{"saturation":-100},{"lightness":40},{"visibility":"on"}]},{"featureType":"transit","stylers":[{"saturation":-20},{"visibility":"simplified"}]},{"featureType":"administrative.province","stylers":[{"visibility":"off"}]},{"featureType":"water","elementType":"labels","stylers":[{"visibility":"on"},{"lightness":-25},{"saturation":-100}]},{"featureType":"water","elementType":"geometry","stylers":[{"hue":"#ffff00"},{"lightness":-25},{"saturation":-97}]}],
+                    transitLayer = new google.maps.TransitLayer(),
+                    defaultStyle = {
+                        fillColor: "red",
+                        strokeWeight: 1,
+                        strokeColor: "#954848"
+                    },
+                    selectedStyle = {
+                        fillColor: "blue",
+                        strokeWeight: 1,
+                        strokeColor: "#9eb1bb"
+                    },
+                    infowindow = new google.maps.InfoWindow({
+                        content: ""
+                    });
+                    
+                map = new google.maps.Map(document.getElementById("map-canvas"), {
+                    minZoom: 14,
+                    zoom: 14,                    
+                    maxZoom: 19,
+                    panControl: false,
+                    center: {lat: 40.774066683777875, lng: -73.97723823183378}
+                });                    
+                
+                map.setOptions({styles: grayscaleStyles});                
+                transitLayer.setMap(map);
+
+                map.data.loadGeoJson("data.geojson");
+                map.data.setStyle(defaultStyle);                
+
+                $.getJSON("mngmt.json").done(function( data ) {
+                    managers = data;
+                });
+                
+                google.maps.event.addListener(infowindow,"closeclick", function(){
+                   map.data.setStyle(defaultStyle);
+                });
+                
+                map.data.addListener("mouseover", function (event) {
+                    var mgr = event.feature.getProperty("mngr"),
+                        address = event.feature.getProperty("address");
+                    $("#info-box").html(address).show();
+                    
+                    map.data.revertStyle();
+                    map.data.overrideStyle(event.feature, selectedStyle);
+                });
+                
+                map.data.addListener("mouseout", function (event) {
+                    $("#info-box").hide();
+                    map.data.revertStyle();
+                });
+                
+                map.data.addListener("click", function (event) {                    
+                    var mgr = event.feature.getProperty("mngr"),
+                        address = event.feature.getProperty("address"),
+                        year = event.feature.getProperty("year"),
+                        url = managers[mgr].url,
+                        name = managers[mgr].name;
+                        
+                    infowindow.setContent("<div id='infoWindow-fix'>" + address + "<br><a target='_blank' href='" + url + "'>" + name + "</a><br>Year built: " + year + "</div>");
+                    infowindow.setPosition(event.latLng);
+                    infowindow.open(map);
+                    
+                    setTimeout(function(){                    
+                        map.data.setStyle(function(feature) {
+                            if (feature.getProperty("mngr") == mgr) {
+                                return selectedStyle;
+                            } else {
+                                return defaultStyle;
+                            }
+                        });
+                    }, 1);
+                });                
+                        
+                $("#stabilized-checkbox").change(function() {
+                    if($(this).is(":checked")) {
+                        map.data.setStyle(function(feature) {
+                            if (feature.getProperty("stab") == 1
+                                && feature.getProperty("year") < 1974
+                                ) {
+                                return defaultStyle;
+                            } else {
+                                return {visible: false};
+                            }
+                        });                        
+                    } else {
+                        map.data.setStyle(defaultStyle);
+                    }
+                });                        
+            }
+            google.maps.event.addDomListener(window, "load", initialize);
+        })();
+        </script>
+    </head>
+    <body>
+        <div id="map-canvas"></div>
+        <div id="mngmt"></div>
+        <div id="stabilized">
+            <label>
+                <!--<input type="checkbox" id="stabilized-checkbox">Possibly rent stabilized-->
+            </label>
+        </div>            
+        <div id="info-box"></div>
+        <p id="intro">This is a map of more than 2,000 no-fee<br>rental buildings in Manhattan</p>
+        
+        <script>
+            (function(i,s,o,g,r,a,m){i["GoogleAnalyticsObject"]=r;i[r]=i[r]||function(){
+            (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+            m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+            })(window,document,"script","//www.google-analytics.com/analytics.js","ga");
+            ga("create", "UA-58566861-2", "auto");
+            ga("send", "pageview");
+        </script>        
+    </body>
+</html>
